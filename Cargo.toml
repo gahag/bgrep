@@ -7,3 +7,7 @@ edition = "2018"
 [dependencies]
 regex = "1"
 getopts = "0.2"
+
+
+[profile.release]
+lto = true
