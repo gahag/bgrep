@@ -23,6 +23,7 @@ impl Default for GrepOutput {
 pub struct Args {
   pub help: Option<String>,
   pub output: GrepOutput,
+  pub inverse: bool,
   pub pattern: String,
   pub files: Vec<String>
 }
@@ -34,7 +35,8 @@ pub fn parse() -> Result<Args, io::ErrorKind> {
   optparser.optflag("h", "help", "print usage message")
            .optflag("l", "files-with-matches", "print the name of the matched files")
            .optflag("o", "only-matching", "print the matched bytes of each match")
-           .optflag("p", "position", "print the byte offset of each match");
+           .optflag("p", "position", "print the byte offset of each match")
+           .optflag("v", "invert-match", "inverse matching");
 
   let usage = |program: &str| {
     optparser.usage(&format!("Usage: {} [OPTIONS] PATTERN [FILES...]", program))
@@ -89,6 +91,8 @@ pub fn parse() -> Result<Args, io::ErrorKind> {
     (_,     _,     true ) => Ok(GrepOutput::Position),
   }?;
 
+  let inverse = opts.opt_present("v");
+
   let mut free = opts.free;
 
   if free.is_empty() {
@@ -99,6 +103,7 @@ pub fn parse() -> Result<Args, io::ErrorKind> {
     Args {
       help: None,
       output,
+      inverse,
       pattern: free.remove(0),
       files: free
     }

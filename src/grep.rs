@@ -2,13 +2,84 @@ use std::io;
 use std::io::{Read, Write};
 use std::fs::File;
 
+use regex::bytes::Regex;
 use regex::bytes::RegexBuilder;
 
 use crate::args::{Args, GrepOutput};
 
 
 
-pub fn grep(args: &Args) -> Result<(), io::Error> {
+fn grep_filename(
+  stdout: &mut io::StdoutLock,
+  args: &Args,
+  path: &String,
+  pattern: &Regex,
+  buffer: &[u8]
+) -> Result<(), io::Error> {
+  if pattern.is_match(buffer) ^ args.inverse {
+    writeln!(stdout, "{}", path)?;
+  }
+
+  Ok(())
+}
+
+
+fn grep_bytes(
+  stdout: &mut io::StdoutLock,
+  args: &Args,
+  pattern: &Regex,
+  buffer: &[u8]
+) -> Result<(), io::Error> {
+  let matches: Box<Iterator<Item = &[u8]>> = if args.inverse {
+    Box::new(pattern.split(buffer))
+  }
+  else {
+    Box::new(pattern.find_iter(buffer).map(|m| m.as_bytes()))
+  };
+
+  for m in matches {
+    stdout.write(m)?;
+    writeln!(stdout)?;
+  }
+
+  Ok(())
+}
+
+
+fn grep_position(
+  stdout: &mut io::StdoutLock,
+  args: &Args,
+  pattern: &Regex,
+  buffer: &[u8]
+) -> Result<(), io::Error> {
+  let mut write_hex = |x| writeln!(stdout, "0x{:x}", x);
+
+  if args.inverse {
+    let mut last: usize = 0;
+
+    for m in pattern.find_iter(buffer) {
+      for offset in last .. m.start() {
+        write_hex(offset)?;
+      }
+
+      last = m.end()
+    }
+
+    for offset in last .. buffer.len() {
+      write_hex(offset)?;
+    }
+  }
+  else {
+    for m in pattern.find_iter(buffer) {
+      write_hex(m.start())?;
+    }
+  }
+
+  Ok(())
+}
+
+
+pub fn run(args: &Args) -> Result<(), io::Error> {
   let mut builder = RegexBuilder::new(&args.pattern);
   builder.unicode(false);
 
@@ -46,24 +117,12 @@ pub fn grep(args: &Args) -> Result<(), io::Error> {
         }
       };
 
+
       match args.output {
-        GrepOutput::Filename => {
-          if pattern.is_match(&buffer) {
-            writeln!(stdout, "{}", path)?;
-          }
-        },
-        GrepOutput::Bytes => {
-          for match_ in pattern.find_iter(&buffer) {
-            stdout.write(match_.as_bytes())?;
-            writeln!(stdout)?;
-          }
-        },
-        GrepOutput::Position => {
-          for match_ in pattern.find_iter(&buffer) {
-            writeln!(stdout, "0x{:x}", match_.start())?;
-          }
-        }
-      };
+        GrepOutput::Filename => grep_filename(&mut stdout, args, &path, &pattern, &buffer),
+        GrepOutput::Bytes    => grep_bytes(&mut stdout, args, &pattern, &buffer),
+        GrepOutput::Position => grep_position(&mut stdout, args, &pattern, &buffer)
+      }?;
 
 
       result

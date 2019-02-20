@@ -20,7 +20,7 @@ fn main() -> ! {
       return Ok(())
     }
 
-    grep::grep(&args)
+    grep::run(&args)
   }
 
   process::exit(
