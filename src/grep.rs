@@ -82,6 +82,7 @@ fn grep_position(
 pub fn run(args: &Args) -> Result<(), io::Error> {
   let mut builder = RegexBuilder::new(&args.pattern);
   builder.unicode(false);
+  builder.dot_matches_new_line(true);
 
   let pattern = builder.build().map_err(
     |e| {
