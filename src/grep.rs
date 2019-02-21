@@ -2,11 +2,19 @@ use std::io;
 use std::io::{Read, Write};
 use std::fs::File;
 
-use regex::bytes::Regex;
-use regex::bytes::RegexBuilder;
+use regex::bytes::{Regex, RegexBuilder};
 
 use crate::args::{Args, GrepOutput};
 
+
+
+fn build_pattern(pattern: &String) -> Result<Regex, regex::Error> {
+  let mut builder = RegexBuilder::new(pattern);
+  builder.unicode(false);
+  builder.dot_matches_new_line(true);
+
+  builder.build()
+}
 
 
 fn grep_filename(
@@ -58,14 +66,14 @@ fn grep_position(
     let mut last: usize = 0;
 
     for m in pattern.find_iter(buffer) {
-      for offset in last .. m.start() {
+      for offset in last .. m.start() { // print each offset inside the span.
         write_hex(offset)?;
       }
 
       last = m.end()
     }
 
-    for offset in last .. buffer.len() {
+    for offset in last .. buffer.len() { // print the last span, if any.
       write_hex(offset)?;
     }
   }
@@ -80,11 +88,7 @@ fn grep_position(
 
 
 pub fn run(args: &Args) -> Result<(), io::Error> {
-  let mut builder = RegexBuilder::new(&args.pattern);
-  builder.unicode(false);
-  builder.dot_matches_new_line(true);
-
-  let pattern = builder.build().map_err(
+  let pattern = build_pattern(&args.pattern).map_err(
     |e| {
       eprintln!("Error: invalid pattern '{}', {}", args.pattern, e);
       io::ErrorKind::InvalidInput
