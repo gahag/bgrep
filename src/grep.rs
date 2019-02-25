@@ -114,6 +114,10 @@ pub fn run(args: &Args) -> Result<(), io::Error> {
         }
       };
 
+      // Resize buffer to the file size if it exceeds the current size:
+      let file_size = file.metadata().map(|m| m.len()).unwrap_or(0) as usize;
+      buffer.reserve(file_size.saturating_sub(buffer.len()));
+
       match file.read_to_end(&mut buffer) {
         Ok(_)  => (),
         Err(e) => return {
