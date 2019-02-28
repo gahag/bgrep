@@ -20,7 +20,7 @@ fn build_pattern(pattern: &String) -> Result<Regex, regex::Error> {
 fn grep_filename(
   stdout: &mut io::StdoutLock,
   args: &Args,
-  path: &String,
+  path: &str,
   pattern: &Regex,
   buffer: &[u8]
 ) -> Result<(), io::Error> {
@@ -38,17 +38,18 @@ fn grep_bytes(
   pattern: &Regex,
   buffer: &[u8]
 ) -> Result<(), io::Error> {
-  let matches: Box<Iterator<Item = &[u8]>> = if args.inverse {
-    Box::new(pattern.split(buffer))
+  if args.inverse {
+    for m in pattern.split(buffer) {
+      stdout.write(m)?;
+      writeln!(stdout)?;
+    }
   }
   else {
-    Box::new(pattern.find_iter(buffer).map(|m| m.as_bytes()))
+    for m in pattern.find_iter(buffer).map(|m| m.as_bytes()) {
+      stdout.write(m)?;
+      writeln!(stdout)?;
+    }
   };
-
-  for m in matches {
-    stdout.write(m)?;
-    writeln!(stdout)?;
-  }
 
   Ok(())
 }
@@ -106,25 +107,30 @@ pub fn run(args: &Args) -> Result<(), io::Error> {
     |result, path| {
       buffer.clear();
 
-      let mut file = match File::open(&path) {
-        Ok(f)  => f,
-        Err(e) => return {
-          eprintln!("Error: failed to open file '{}'", path);
-          Err(e)
-        }
+      let (read_result, path) = if path == "-" {
+        (io::stdin().lock().read_to_end(&mut buffer), "<stdin>")
+      }
+      else {
+        let mut file = File::open(&path)
+                            .map_err(|e| {
+                              eprintln!("Error: failed to open file '{}'", path);
+                              e
+                            })?;
+
+        // Resize buffer to the file size if it exceeds the current size:
+        let file_size = file.metadata().map(|m| m.len()).unwrap_or(0) as usize;
+        buffer.reserve(file_size.saturating_sub(buffer.len()));
+
+        (file.read_to_end(&mut buffer), path.as_str())
       };
 
-      // Resize buffer to the file size if it exceeds the current size:
-      let file_size = file.metadata().map(|m| m.len()).unwrap_or(0) as usize;
-      buffer.reserve(file_size.saturating_sub(buffer.len()));
 
-      match file.read_to_end(&mut buffer) {
-        Ok(_)  => (),
-        Err(e) => return {
+      read_result.map_err(
+        |e| {
           eprintln!("Error: failed to read file '{}'", path);
-          Err(e)
+          e
         }
-      };
+      )?;
 
 
       match args.output {

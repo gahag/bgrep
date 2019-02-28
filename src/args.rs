@@ -99,12 +99,18 @@ pub fn parse() -> Result<Args, io::ErrorKind> {
     return Err(args_error(&program));
   }
 
+  let pattern = free.remove(0);
+
+  if free.is_empty() {
+    free.push(String::from("-")); // No input files -> input from stdin.
+  }
+
   Ok(
     Args {
       help: None,
       output,
       inverse,
-      pattern: free.remove(0),
+      pattern,
       files: free
     }
   )
