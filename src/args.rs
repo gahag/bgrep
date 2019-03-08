@@ -1,37 +1,41 @@
 use std::env;
 use std::io;
 
-
-use getopts::Options;
-
+use getopts::Options as OptParser;
 
 
-pub enum GrepOutput {
+pub enum Output {
   Filename,
   Bytes,
   Position
 }
 
-impl Default for GrepOutput {
-  fn default() -> GrepOutput {
-    GrepOutput::Filename
+impl Default for Output {
+  fn default() -> Output {
+    Output::Filename
   }
 }
 
 
 #[derive(Default)]
-pub struct Args {
+pub struct Options {
   pub help: Option<String>,
-  pub output: GrepOutput,
   pub inverse: bool,
+  pub output: Output
+}
+
+
+#[derive(Default)]
+pub struct Args {
+  pub options: Options,
   pub pattern: String,
-  pub files: Vec<String>
+  pub files: Box<[String]>
 }
 
 
 
 pub fn parse() -> Result<Args, io::ErrorKind> {
-  let mut optparser = Options::new();
+  let mut optparser = OptParser::new();
   optparser.optflag("h", "help", "print usage message")
            .optflag("l", "files-with-matches", "print the name of the matched files")
            .optflag("o", "only-matching", "print the matched bytes of each match")
@@ -48,13 +52,9 @@ pub fn parse() -> Result<Args, io::ErrorKind> {
   };
 
 
-  let mut args: Vec<String> = env::args().collect();
+  let mut args = env::args();
 
-  if args.is_empty() {
-    return Err(args_error("<program name>"));
-  }
-
-  let program = args.remove(0);
+  let program = args.next().ok_or_else(|| args_error("<program name>"))?;
 
   let opts = optparser.parse(args).map_err(
     |e| {
@@ -66,7 +66,10 @@ pub fn parse() -> Result<Args, io::ErrorKind> {
   if opts.opt_present("h") {
     return Ok(
       Args {
-        help: Some(usage(&program)),
+        options: Options {
+          help: Some(usage(&program)),
+          .. Default::default()
+        },
         .. Default::default()
       }
     );
@@ -86,12 +89,16 @@ pub fn parse() -> Result<Args, io::ErrorKind> {
     (true,  _,     true ) => error_exclusive("-l", "-p"),
     (_,     true,  true ) => error_exclusive("-o", "-p"),
     (false, false, false) => Ok(Default::default()),
-    (true,  _,     _    ) => Ok(GrepOutput::Filename),
-    (_,     true,  _    ) => Ok(GrepOutput::Bytes),
-    (_,     _,     true ) => Ok(GrepOutput::Position),
+    (true,  _,     _    ) => Ok(Output::Filename),
+    (_,     true,  _    ) => Ok(Output::Bytes),
+    (_,     _,     true ) => Ok(Output::Position),
   }?;
 
-  let inverse = opts.opt_present("v");
+  let options = Options {
+    help: None,
+    output,
+    inverse: opts.opt_present("v")
+  };
 
   let mut free = opts.free;
 
@@ -101,17 +108,18 @@ pub fn parse() -> Result<Args, io::ErrorKind> {
 
   let pattern = free.remove(0);
 
-  if free.is_empty() {
-    free.push(String::from("-")); // No input files -> input from stdin.
+  let files = if free.is_empty() {
+    Box::new([String::from("-")]) // No input files -> input from stdin.
   }
+  else {
+    free.into_boxed_slice()
+  };
 
   Ok(
     Args {
-      help: None,
-      output,
-      inverse,
+      options,
       pattern,
-      files: free
+      files
     }
   )
 }

@@ -1,26 +1,23 @@
 extern crate regex;
 extern crate getopts;
 
-
 mod args;
 mod grep;
 
-
 use std::io;
 use std::process;
-
 
 
 fn main() -> ! {
   fn run() -> Result<(), io::Error> {
     let args = args::parse()?;
 
-    if let Some(help) = args.help {
+    if let Some(help) = args.options.help {
       eprint!("{}", help);
       return Ok(())
     }
 
-    grep::run(&args)
+    grep::run(args)
   }
 
   process::exit(

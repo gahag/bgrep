@@ -4,8 +4,7 @@ use std::fs::File;
 
 use regex::bytes::{Regex, RegexBuilder};
 
-use crate::args::{Args, GrepOutput};
-
+use crate::{args, args::Args};
 
 
 fn build_pattern(pattern: &String) -> Result<Regex, regex::Error> {
@@ -19,12 +18,12 @@ fn build_pattern(pattern: &String) -> Result<Regex, regex::Error> {
 
 fn grep_filename(
   stdout: &mut io::StdoutLock,
-  args: &Args,
+  options: &args::Options,
   path: &str,
   pattern: &Regex,
   buffer: &[u8]
 ) -> Result<(), io::Error> {
-  if pattern.is_match(buffer) ^ args.inverse {
+  if pattern.is_match(buffer) ^ options.inverse {
     writeln!(stdout, "{}", path)?;
   }
 
@@ -34,11 +33,11 @@ fn grep_filename(
 
 fn grep_bytes(
   stdout: &mut io::StdoutLock,
-  args: &Args,
+  options: &args::Options,
   pattern: &Regex,
   buffer: &[u8]
 ) -> Result<(), io::Error> {
-  if args.inverse {
+  if options.inverse {
     for m in pattern.split(buffer) {
       stdout.write(m)?;
       writeln!(stdout)?;
@@ -57,13 +56,13 @@ fn grep_bytes(
 
 fn grep_position(
   stdout: &mut io::StdoutLock,
-  args: &Args,
+  options: &args::Options,
   pattern: &Regex,
   buffer: &[u8]
 ) -> Result<(), io::Error> {
   let mut write_hex = |x| writeln!(stdout, "0x{:x}", x);
 
-  if args.inverse {
+  if options.inverse {
     let mut last: usize = 0;
 
     for m in pattern.find_iter(buffer) {
@@ -88,10 +87,13 @@ fn grep_position(
 }
 
 
-pub fn run(args: &Args) -> Result<(), io::Error> {
-  let pattern = build_pattern(&args.pattern).map_err(
+pub fn run(args: Args) -> Result<(), io::Error> {
+  let Args { options, pattern, files } = args;
+
+
+  let pattern = build_pattern(&pattern).map_err(
     |e| {
-      eprintln!("Error: invalid pattern '{}', {}", args.pattern, e);
+      eprintln!("Error: invalid pattern '{}', {}", pattern, e);
       io::ErrorKind::InvalidInput
     }
   )?;
@@ -102,7 +104,7 @@ pub fn run(args: &Args) -> Result<(), io::Error> {
 
   let mut buffer = Vec::<u8>::new();
 
-  args.files.iter().fold(
+  files.into_iter().fold(
     Ok(()),
     |result, path| {
       buffer.clear();
@@ -133,10 +135,10 @@ pub fn run(args: &Args) -> Result<(), io::Error> {
       )?;
 
 
-      match args.output {
-        GrepOutput::Filename => grep_filename(&mut stdout, args, &path, &pattern, &buffer),
-        GrepOutput::Bytes    => grep_bytes(&mut stdout, args, &pattern, &buffer),
-        GrepOutput::Position => grep_position(&mut stdout, args, &pattern, &buffer)
+      match options.output {
+        args::Output::Filename => grep_filename(&mut stdout, &options, &path, &pattern, &buffer),
+        args::Output::Bytes    => grep_bytes(&mut stdout, &options, &pattern, &buffer),
+        args::Output::Position => grep_position(&mut stdout, &options, &pattern, &buffer)
       }?;
 
 
