@@ -44,8 +44,8 @@ fn grep_bytes(
     }
   }
   else {
-    for m in pattern.find_iter(buffer).map(|m| m.as_bytes()) {
-      stdout.write(m)?;
+    for m in pattern.find_iter(buffer) {
+      stdout.write(m.as_bytes())?;
       writeln!(stdout)?;
     }
   };
@@ -63,17 +63,17 @@ fn grep_position(
   let mut write_hex = |x| writeln!(stdout, "0x{:x}", x);
 
   if options.inverse {
-    let mut last: usize = 0;
+    let mut last: usize = 0; // Start from the beginning of the buffer.
 
     for m in pattern.find_iter(buffer) {
-      for offset in last .. m.start() { // print each offset inside the span.
+      for offset in last .. m.start() { // Print each offset inside the span.
         write_hex(offset)?;
       }
 
       last = m.end()
     }
 
-    for offset in last .. buffer.len() { // print the last span, if any.
+    for offset in last .. buffer.len() { // Print the last span, if any.
       write_hex(offset)?;
     }
   }
