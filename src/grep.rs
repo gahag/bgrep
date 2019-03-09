@@ -22,7 +22,7 @@ fn grep_filename(
   path: &str,
   pattern: &Regex,
   buffer: &[u8]
-) -> Result<(), io::Error> {
+) -> io::Result<()> {
   if pattern.is_match(buffer) ^ options.inverse {
     writeln!(stdout, "{}", path)?;
   }
@@ -36,7 +36,7 @@ fn grep_bytes(
   options: &args::Options,
   pattern: &Regex,
   buffer: &[u8]
-) -> Result<(), io::Error> {
+) -> io::Result<()> {
   if options.inverse {
     for m in pattern.split(buffer) {
       stdout.write(m)?;
@@ -59,7 +59,7 @@ fn grep_position(
   options: &args::Options,
   pattern: &Regex,
   buffer: &[u8]
-) -> Result<(), io::Error> {
+) -> io::Result<()> {
   let mut write_hex = |x| writeln!(stdout, "0x{:x}", x);
 
   if options.inverse {
@@ -87,7 +87,7 @@ fn grep_position(
 }
 
 
-pub fn run(args: Args) -> Result<(), io::Error> {
+pub fn run(args: Args) -> io::Result<()> {
   let Args { options, pattern, files } = args;
 
 

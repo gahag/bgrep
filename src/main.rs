@@ -6,7 +6,7 @@ use std::process;
 
 
 fn main() -> ! {
-  fn run() -> Result<(), io::Error> {
+  fn run() -> io::Result<()> {
     let args = args::parse()?;
 
     if let Some(help) = args.options.help {
