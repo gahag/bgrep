@@ -4,7 +4,7 @@ use std::fs::File;
 
 use regex::bytes::{Regex, RegexBuilder};
 
-use crate::{args, args::Args};
+use crate::args::{self, Args};
 
 
 fn build_pattern(pattern: &String) -> Result<Regex, regex::Error> {

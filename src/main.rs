@@ -1,6 +1,3 @@
-extern crate regex;
-extern crate getopts;
-
 mod args;
 mod grep;
 
