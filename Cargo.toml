@@ -1,8 +1,17 @@
 [package]
 name = "bgrep"
 version = "0.1.0"
+description = "bgrep is a grep tailored to handle binary patterns and files"
 authors = ["gahag <gabriel.s.b@live.com>"]
+homepage = "https://github.com/gahag/bgrep"
+documentation = "https://github.com/gahag/bgrep"
+repository = "https://github.com/gahag/bgrep"
+readme = "readme.md"
+keywords = [ "grep", "binary", "regex", "search", "pattern" ]
+categories = ["command-line-utilities", "text-processing"]
+license = "BSD-3-Clause"
 edition = "2018"
+
 
 [dependencies]
 regex = "1"
