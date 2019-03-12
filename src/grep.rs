@@ -7,10 +7,15 @@ use regex::bytes::{Regex, RegexBuilder};
 use crate::args::{self, Args};
 
 
-fn build_pattern(pattern: &String) -> Result<Regex, regex::Error> {
+fn build_pattern(
+  pattern: &String,
+  options: &args::Options
+) -> Result<Regex, regex::Error> {
   let mut builder = RegexBuilder::new(pattern);
+
   builder.unicode(false);
   builder.dot_matches_new_line(true);
+  builder.case_insensitive(options.case_insensitive);
 
   builder.build()
 }
@@ -91,7 +96,7 @@ pub fn run(args: Args) -> io::Result<()> {
   let Args { options, pattern, files } = args;
 
 
-  let pattern = build_pattern(&pattern).map_err(
+  let pattern = build_pattern(&pattern, &options).map_err(
     |e| {
       eprintln!("Error: invalid pattern '{}', {}", pattern, e);
       io::ErrorKind::InvalidInput

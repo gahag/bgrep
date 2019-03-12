@@ -21,6 +21,7 @@ impl Default for Output {
 pub struct Options {
   pub help: Option<String>,
   pub inverse: bool,
+  pub case_insensitive: bool,
   pub output: Output
 }
 
@@ -40,7 +41,8 @@ pub fn parse() -> Result<Args, io::ErrorKind> {
            .optflag("l", "files-with-matches", "print the name of the matched files")
            .optflag("o", "only-matching", "print the matched bytes of each match")
            .optflag("p", "position", "print the byte offset of each match")
-           .optflag("v", "invert-match", "inverse matching");
+           .optflag("v", "invert-match", "inverse matching")
+           .optflag("i", "ignore-case", "case insensitive matching");
 
   let usage = |program: &str| {
     optparser.usage(&format!("Usage: {} [OPTIONS] PATTERN [FILES...]", program))
@@ -96,8 +98,9 @@ pub fn parse() -> Result<Args, io::ErrorKind> {
 
   let options = Options {
     help: None,
-    output,
-    inverse: opts.opt_present("v")
+    inverse: opts.opt_present("v"),
+    case_insensitive: opts.opt_present("i"),
+    output
   };
 
   let mut free = opts.free;
