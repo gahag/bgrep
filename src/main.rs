@@ -1,20 +1,25 @@
 mod args;
 mod grep;
 
-use std::io;
+use std::io::{self, Write};
 use std::process;
+
+use args::Command;
 
 
 fn main() -> ! {
   fn run() -> io::Result<()> {
-    let args = args::parse()?;
+    let command = args::parse().map_err(
+      |e| {
+        eprintln!("{}", e.message);
+        io::ErrorKind::InvalidInput
+      }
+    )?;
 
-    if let Some(help) = args.options.help {
-      eprint!("{}", help);
-      return Ok(())
+    match command {
+      Command::Help(msg) | Command::Version(msg) => writeln!(io::stdout(), "{}", msg),
+      Command::Grep(args) => grep::run(args)
     }
-
-    grep::run(args)
   }
 
   process::exit(

@@ -15,7 +15,7 @@ edition = "2018"
 
 [dependencies]
 regex = "1"
-getopts = "0.2"
+clap = "2.32"
 
 
 [profile.release]

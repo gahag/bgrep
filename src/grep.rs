@@ -59,7 +59,7 @@ fn grep_bytes(
 }
 
 
-fn grep_position(
+fn grep_offset(
   stdout: &mut io::StdoutLock,
   options: &args::Options,
   pattern: &Regex,
@@ -141,9 +141,9 @@ pub fn run(args: Args) -> io::Result<()> {
 
 
       match options.output {
-        args::Output::Filename => grep_filename(&mut stdout, &options, &path, &pattern, &buffer),
+        args::Output::FileName => grep_filename(&mut stdout, &options, &path, &pattern, &buffer),
         args::Output::Bytes    => grep_bytes(&mut stdout, &options, &pattern, &buffer),
-        args::Output::Position => grep_position(&mut stdout, &options, &pattern, &buffer)
+        args::Output::Offset   => grep_offset(&mut stdout, &options, &pattern, &buffer)
       }?;
 
 
