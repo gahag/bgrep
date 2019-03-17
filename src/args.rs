@@ -52,6 +52,7 @@ fn build_app() -> App<'static, 'static> {
     .about(crate_description!())
     .author(crate_authors!())
     .version(crate_version!())
+    .template("{bin} {version}\nMade by {author}\n{about}\n\n{usage}\n\nFLAGS:\n{flags}")
     // Positional arguments:
     .arg(
       Arg::with_name("pattern")
@@ -68,27 +69,27 @@ fn build_app() -> App<'static, 'static> {
       Arg::with_name("invert-match")
         .short("v")
         .long("invert-match")
-        .help("invert the sense of matching, to select non matching slices")
+        .help("Invert the sense of matching, to select non matching slices")
     )
     .arg(
       Arg::with_name("ignore-case")
         .short("i")
         .long("ignore-case")
-        .help("case insensitive matching")
+        .help("Case insensitive matching for ASCII alphabetic characters")
     )
     // Input flags:
     .arg(
       Arg::with_name("trim-ending-newline")
         .short("n")
         .long("trim-ending-newline")
-        .help("if the file ends with a newline, disconsider the last byte")
+        .help("If the file ends with a newline, disconsider the last byte")
     )
     // Output flags:
     .arg(
       Arg::with_name("only-matching")
         .short("o")
         .long("only-matching")
-        .help("print the matched bytes of each match")
+        .help("Prints the matched bytes of each match")
         .overrides_with_all(&[
           "byte-offset",
           "files-with-matches",
@@ -99,7 +100,7 @@ fn build_app() -> App<'static, 'static> {
       Arg::with_name("byte-offset")
         .short("b")
         .long("byte-offset")
-        .help("print the byte offset of each match")
+        .help("Prints the byte offset of each match")
         .overrides_with_all(&[
           "only-matching",
           "files-with-matches",
@@ -110,7 +111,7 @@ fn build_app() -> App<'static, 'static> {
       Arg::with_name("files-with-matches")
         .short("l")
         .long("files-with-matches")
-        .help("print the name of the matched files")
+        .help("Prints the name of the matched files")
         .overrides_with_all(&[
           "only-matching",
           "byte-offset",
@@ -121,7 +122,7 @@ fn build_app() -> App<'static, 'static> {
       Arg::with_name("files-without-matches")
         .short("L")
         .long("files-without-matches")
-        .help("print the name of non-matched files")
+        .help("Prints the name of non-matched files")
         .overrides_with_all(&[
           "only-matching",
           "byte-offset",
