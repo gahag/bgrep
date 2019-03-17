@@ -18,6 +18,7 @@ impl Default for Output {
 pub struct Options {
   pub inverse: bool,
   pub case_insensitive: bool,
+  pub non_matching: bool, // Wheter to print non matching files. Only true when (-L).
   pub output: Output
 }
 
@@ -66,7 +67,7 @@ fn build_app() -> App<'static, 'static> {
       Arg::with_name("invert-match")
         .short("v")
         .long("invert-match")
-        .help("inverse matching")
+        .help("invert the sense of matching, to select non matching slices")
     )
     .arg(
       Arg::with_name("ignore-case")
@@ -112,7 +113,7 @@ fn build_app() -> App<'static, 'static> {
       Arg::with_name("files-without-matches")
         .short("L")
         .long("files-without-matches")
-        .help("print the name of non-matched files (equivalent to `-vl`)")
+        .help("print the name of non-matched files")
         .overrides_with_all(&[
           "only-matching",
           "byte-offset",
@@ -152,8 +153,9 @@ fn build_args<'a>(args: ArgMatches<'a>) -> Args {
 
   Args {
     options: Options {
-      inverse: flag("invert-match") ^ flag("files-without-matches"), // (-L) is (-vl).
-      case_insensitive: args.is_present("ignore-case"),
+      inverse: flag("invert-match"),
+      case_insensitive: flag("ignore-case"),
+      non_matching: flag("files-without-matches"),
       output
     },
     pattern,

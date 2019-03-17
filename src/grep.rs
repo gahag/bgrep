@@ -28,12 +28,40 @@ fn grep_filename(
   pattern: &Regex,
   buffer: &[u8]
 ) -> io::Result<bool> {
-  if pattern.is_match(buffer) ^ options.inverse {
-    writeln!(stdout, "{}", path)?;
-    Ok(true)
+  if options.inverse {
+    // if the pattern matches multiple times, comprising the entire buffer, then no
+    // inverse match is present.
+    let mut matches = pattern.find_iter(buffer);
+
+    let mut end = 0; // Start from the beginning of the buffer.
+
+    let inverse_match = matches.find(
+      |m| {
+        let matched = m.start() > end;
+
+        end = m.end();
+
+        matched
+      }
+    );
+
+    let matched = (inverse_match.is_some() || end < buffer.len()) // Check the last slice.
+                ^ options.non_matching;
+
+    if matched {
+      writeln!(stdout, "{}", path)?;
+    }
+
+    Ok(matched)
   }
   else {
-    Ok(false)
+    let matched = pattern.is_match(buffer) ^ options.non_matching;
+
+    if matched {
+      writeln!(stdout, "{}", path)?;
+    }
+
+    Ok(matched)
   }
 }
 
