@@ -27,12 +27,14 @@ fn grep_filename(
   path: &str,
   pattern: &Regex,
   buffer: &[u8]
-) -> io::Result<()> {
+) -> io::Result<bool> {
   if pattern.is_match(buffer) ^ options.inverse {
     writeln!(stdout, "{}", path)?;
+    Ok(true)
   }
-
-  Ok(())
+  else {
+    Ok(false)
+  }
 }
 
 
@@ -41,21 +43,46 @@ fn grep_bytes(
   options: &args::Options,
   pattern: &Regex,
   buffer: &[u8]
-) -> io::Result<()> {
+) -> io::Result<bool> {
+  let mut write_bytes = |bs| {
+    stdout.write(bs)?;
+    writeln!(stdout)
+  };
+
+
+  let mut matched = false;
+
   if options.inverse {
-    for m in pattern.split(buffer) {
-      stdout.write(m)?;
-      writeln!(stdout)?;
+    let mut matches = pattern.split(buffer);
+
+    if let Some(bs) = matches.next() {
+      if !bs.is_empty() { // A regex may have a empty match, but when inverse matching 
+        write_bytes(bs)?; // we disconsider empty intervals.
+        matched = true;
+      }
+    };
+
+    for bs in matches {
+      if !bs.is_empty() {
+        write_bytes(bs)?;
+      }
     }
   }
   else {
-    for m in pattern.find_iter(buffer) {
-      stdout.write(m.as_bytes())?;
-      writeln!(stdout)?;
+    let mut matches = pattern.find_iter(buffer);
+
+    if let Some(m) = matches.next() {
+      write_bytes(m.as_bytes())?;
+      matched = true;
+    }
+
+    for m in matches {
+      write_bytes(m.as_bytes())?;
     }
   };
 
-  Ok(())
+
+  Ok(matched)
 }
 
 
@@ -64,35 +91,50 @@ fn grep_offset(
   options: &args::Options,
   pattern: &Regex,
   buffer: &[u8]
-) -> io::Result<()> {
+) -> io::Result<bool> {
   let mut write_hex = |x| writeln!(stdout, "0x{:x}", x);
 
-  if options.inverse {
-    let mut last: usize = 0; // Start from the beginning of the buffer.
 
-    for m in pattern.find_iter(buffer) {
-      for offset in last .. m.start() { // Print each offset inside the span.
-        write_hex(offset)?;
+  let mut matches = pattern.find_iter(buffer);
+
+  let mut matched = false;
+
+  if options.inverse {
+    // if the pattern matches multiple times, comprising the entire buffer, then no
+    // inverse match is present.
+    let mut end = 0; // Start from the beginning of the buffer.
+
+    for m in matches {
+      if m.start() > end {
+        write_hex(end)?;
+        matched = true;
       }
 
-      last = m.end()
+      end = m.end()
     }
 
-    for offset in last .. buffer.len() { // Print the last span, if any.
-      write_hex(offset)?;
+    if end < buffer.len() { // Write the last span, if any.
+      write_hex(end)?;
+      matched = true;
     }
   }
   else {
-    for m in pattern.find_iter(buffer) {
+    if let Some(m) = matches.next() {
+      write_hex(m.start())?;
+      matched = true;
+    }
+
+    for m in matches {
       write_hex(m.start())?;
     }
   }
 
-  Ok(())
+
+  Ok(matched)
 }
 
 
-pub fn run(args: Args) -> io::Result<()> {
+pub fn run(args: Args) -> io::Result<bool> {
   let Args { options, pattern, files } = args;
 
 
@@ -110,44 +152,52 @@ pub fn run(args: Args) -> io::Result<()> {
   let mut buffer = Vec::<u8>::new();
 
   files.into_iter().fold(
-    Ok(()),
+    Ok(false), // : io::Result<bool>, whether there was a match.
     |result, path| {
       buffer.clear();
 
-      let (read_result, path) = if path == "-" {
-        (io::stdin().lock().read_to_end(&mut buffer), "<stdin>")
-      }
-      else {
-        let mut file = File::open(&path)
-                            .map_err(|e| {
-                              eprintln!("Error: failed to open file '{}'", path);
-                              e
-                            })?;
-
-        // Resize buffer to the file size if it exceeds the current size:
-        let file_size = file.metadata().map(|m| m.len()).unwrap_or(0) as usize;
-        buffer.reserve(file_size.saturating_sub(buffer.len()));
-
-        (file.read_to_end(&mut buffer), path.as_str())
-      };
-
-
-      read_result.map_err(
-        |e| {
-          eprintln!("Error: failed to read file '{}'", path);
-          e
+      let (read_result, path) =
+        if path == "-" {
+          (io::stdin().lock().read_to_end(&mut buffer), "<stdin>")
         }
-      )?;
+        else {
+          let mut file = File::open(&path)
+                              .map_err(|e| {
+                                eprintln!("Error: failed to open file '{}'", path);
+                                e
+                              })?;
+
+          // Resize buffer to the file size if it exceeds the current size:
+          let file_size = file.metadata()
+                              .map(|m| m.len())
+                              .unwrap_or(0) as usize;
+          buffer.reserve(
+            file_size.saturating_sub(buffer.len())
+          );
+
+          (file.read_to_end(&mut buffer), path.as_str())
+        };
 
 
-      match options.output {
+      if let Err(e) = read_result {
+        eprintln!("Error: failed to read file '{}'", path);
+        return Err(e);
+      }
+
+
+      let matched = match options.output {
         args::Output::FileName => grep_filename(&mut stdout, &options, &path, &pattern, &buffer),
         args::Output::Bytes    => grep_bytes(&mut stdout, &options, &pattern, &buffer),
         args::Output::Offset   => grep_offset(&mut stdout, &options, &pattern, &buffer)
       }?;
 
 
-      result
+      if matched {
+        result.and(Ok(true))
+      }
+      else {
+        result
+      }
     }
   )
 }

@@ -8,7 +8,7 @@ use args::Command;
 
 
 fn main() -> ! {
-  fn run() -> io::Result<()> {
+  fn run() -> io::Result<bool> { // Returns whether there was a match.
     let command = args::parse().map_err(
       |e| {
         eprintln!("{}", e.message);
@@ -17,14 +17,18 @@ fn main() -> ! {
     )?;
 
     match command {
-      Command::Help(msg) | Command::Version(msg) => writeln!(io::stdout(), "{}", msg),
-      Command::Grep(args) => grep::run(args)
+      Command::Grep(args) => grep::run(args),
+      Command::Help(msg) | Command::Version(msg) => {
+        writeln!(io::stdout(), "{}", msg)?;
+        Ok(true)
+      }
     }
   }
 
   process::exit(
     match run() {
-      Ok(()) => 0,
+      Ok(true)  => 0,
+      Ok(false) => 1,
       Err(e) => match e.kind() {
         io::ErrorKind::InvalidInput     => 3,
         io::ErrorKind::NotFound         => 4,
