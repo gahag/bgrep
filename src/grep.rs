@@ -213,10 +213,16 @@ pub fn run(args: Args) -> io::Result<bool> {
       }
 
 
+      let buffer = match (options.trim_ending_newline, buffer.last()) {
+        (true, Some(b'\n')) => &buffer[.. buffer.len() - 1],
+        _ => &buffer
+      };
+
+
       let matched = match options.output {
-        args::Output::FileName => grep_filename(&mut stdout, &options, &path, &pattern, &buffer),
-        args::Output::Bytes    => grep_bytes(&mut stdout, &options, &pattern, &buffer),
-        args::Output::Offset   => grep_offset(&mut stdout, &options, &pattern, &buffer)
+        args::Output::FileName => grep_filename(&mut stdout, &options, &path, &pattern, buffer),
+        args::Output::Bytes    => grep_bytes(&mut stdout, &options, &pattern, buffer),
+        args::Output::Offset   => grep_offset(&mut stdout, &options, &pattern, buffer)
       }?;
 
 

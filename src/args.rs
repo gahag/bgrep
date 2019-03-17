@@ -18,6 +18,7 @@ impl Default for Output {
 pub struct Options {
   pub inverse: bool,
   pub case_insensitive: bool,
+  pub trim_ending_newline: bool,
   pub non_matching: bool, // Wheter to print non matching files. Only true when (-L).
   pub output: Output
 }
@@ -74,6 +75,13 @@ fn build_app() -> App<'static, 'static> {
         .short("i")
         .long("ignore-case")
         .help("case insensitive matching")
+    )
+    // Input flags:
+    .arg(
+      Arg::with_name("trim-ending-newline")
+        .short("n")
+        .long("trim-ending-newline")
+        .help("if the file ends with a newline, disconsider the last byte")
     )
     // Output flags:
     .arg(
@@ -155,6 +163,7 @@ fn build_args<'a>(args: ArgMatches<'a>) -> Args {
     options: Options {
       inverse: flag("invert-match"),
       case_insensitive: flag("ignore-case"),
+      trim_ending_newline: flag("trim-ending-newline"),
       non_matching: flag("files-without-matches"),
       output
     },
