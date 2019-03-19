@@ -111,7 +111,7 @@ fn build_app() -> App<'static, 'static> {
       Arg::with_name("files-with-matches")
         .short("l")
         .long("files-with-matches")
-        .help("Prints the name of the matched files")
+        .help("Prints the name of the matched files (default output mode)")
         .overrides_with_all(&[
           "only-matching",
           "byte-offset",
