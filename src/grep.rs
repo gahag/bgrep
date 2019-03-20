@@ -7,6 +7,8 @@ use regex::bytes::{Regex, RegexBuilder};
 use crate::args::{self, Args};
 
 
+/// Build the regex pattern with the given options.
+/// By default, the `unicode` flag is set to false, and `dot_matches_new_line` set to true.
 fn build_pattern(
   pattern: &String,
   options: &args::Options
@@ -21,6 +23,8 @@ fn build_pattern(
 }
 
 
+/// Run bgrep, outputting `path` to the given `StdoutLock` if there is a match.
+/// Returns whether there was a match.
 fn grep_filename(
   stdout: &mut io::StdoutLock,
   options: &args::Options,
@@ -28,6 +32,8 @@ fn grep_filename(
   pattern: &Regex,
   buffer: &[u8]
 ) -> io::Result<bool> {
+  // When inverse matching, matches must be checked until a "hole" is found.
+  // Otherwise, the more performant `Regex::is_match` can be used.
   if options.inverse {
     // if the pattern matches multiple times, comprising the entire buffer, then no
     // inverse match is present.
@@ -35,6 +41,7 @@ fn grep_filename(
 
     let mut end = 0; // Start from the beginning of the buffer.
 
+    // Try to find a "hole" between matches:
     let inverse_match = matches.find(
       |m| {
         let matched = m.start() > end;
@@ -45,8 +52,9 @@ fn grep_filename(
       }
     );
 
-    let matched = (inverse_match.is_some() || end < buffer.len()) // Check the last slice.
-                ^ options.non_matching;
+    // Also check for a "hole" after the last match.
+    let matched = (inverse_match.is_some() || end < buffer.len())
+                ^ options.non_matching; // List non matching files.
 
     if matched {
       writeln!(stdout, "{}", path)?;
@@ -66,6 +74,8 @@ fn grep_filename(
 }
 
 
+/// Run bgrep, outputting the matched bytes to the given `StdoutLock`.
+/// Returns whether there was a match.
 fn grep_bytes(
   stdout: &mut io::StdoutLock,
   options: &args::Options,
@@ -81,8 +91,10 @@ fn grep_bytes(
   let mut matched = false;
 
   if options.inverse {
+    // `Regex::split` yields the slices outside the matches.
     let mut matches = pattern.split(buffer);
 
+    // Set `matched` if there is a first occurrence:
     if let Some(bs) = matches.next() {
       if !bs.is_empty() { // A regex may have a empty match, but when inverse matching 
         write_bytes(bs)?; // we disconsider empty intervals.
@@ -90,6 +102,7 @@ fn grep_bytes(
       }
     };
 
+    // Iterate the remaining matches:
     for bs in matches {
       if !bs.is_empty() {
         write_bytes(bs)?;
@@ -99,11 +112,13 @@ fn grep_bytes(
   else {
     let mut matches = pattern.find_iter(buffer);
 
+    // Set `matched` if there is a first occurrence:
     if let Some(m) = matches.next() {
       write_bytes(m.as_bytes())?;
       matched = true;
     }
 
+    // Iterate the remaining matches:
     for m in matches {
       write_bytes(m.as_bytes())?;
     }
@@ -114,6 +129,8 @@ fn grep_bytes(
 }
 
 
+/// Run bgrep, outputting the matche's offset in hex to the given `StdoutLock`.
+/// Returns whether there was a match.
 fn grep_offset(
   stdout: &mut io::StdoutLock,
   options: &args::Options,
@@ -141,17 +158,19 @@ fn grep_offset(
       end = m.end()
     }
 
-    if end < buffer.len() { // Write the last span, if any.
+    if end < buffer.len() { // Also check for a "hole" after the last match.
       write_hex(end)?;
       matched = true;
     }
   }
   else {
+    // Set `matched` if there is a first occurrence:
     if let Some(m) = matches.next() {
       write_hex(m.start())?;
       matched = true;
     }
 
+    // Iterate the remaining matches:
     for m in matches {
       write_hex(m.start())?;
     }
@@ -162,7 +181,11 @@ fn grep_offset(
 }
 
 
+/// Run bgrep with the given args, outputting to stdout.
+/// Error detail may be outputted to stderr.
+/// Returns whether there was a match.
 pub fn run(args: Args) -> io::Result<bool> {
+  // Deconstruct to split ownership.
   let Args { options, pattern, files } = args;
 
 
@@ -174,14 +197,18 @@ pub fn run(args: Args) -> io::Result<bool> {
   )?;
 
 
+  // Lock stdout before loop to prevent locking repetitively.
   let stdout = io::stdout();
   let mut stdout = stdout.lock();
 
+  // Reuse the same buffer for all the files, minimizing allocations.
   let mut buffer = Vec::<u8>::new();
 
-  files.into_iter().fold(
-    Ok(false), // : io::Result<bool>, whether there was a match.
-    |result, path| {
+  // We need to store the last generated error if any, or whether there was a match.
+  // Converting to vec to use the owned iterator. Box<[T]> has no owned iterator.
+  files.into_vec().into_iter().fold(
+    Ok(false), // : io::Result<bool>, whether there was a match, or the last error.
+    |result: io::Result<bool>, path: String| {
       buffer.clear();
 
       let (read_result, path) =
@@ -195,7 +222,10 @@ pub fn run(args: Args) -> io::Result<bool> {
                                 e
                               })?;
 
-          // Resize buffer to the file size if it exceeds the current size:
+          // Resize buffer to the file size if it exceeds the current size.
+          // Currently, the strategy is to grow if needed, and otherwise do nothing.
+          // Considering we never shrink the buffer, this can be bad if the first file
+          // is huge and the others are small.
           let file_size = file.metadata()
                               .map(|m| m.len())
                               .unwrap_or(0) as usize;
@@ -213,19 +243,20 @@ pub fn run(args: Args) -> io::Result<bool> {
       }
 
 
-      let buffer = match (options.trim_ending_newline, buffer.last()) {
-        (true, Some(b'\n')) => &buffer[.. buffer.len() - 1],
-        _ => &buffer
+      // Trim the ending newline if requested and present:
+      if options.trim_ending_newline && buffer.last() == Some(&b'\n') {
+        buffer.pop();
       };
 
 
       let matched = match options.output {
-        args::Output::FileName => grep_filename(&mut stdout, &options, &path, &pattern, buffer),
-        args::Output::Bytes    => grep_bytes(&mut stdout, &options, &pattern, buffer),
-        args::Output::Offset   => grep_offset(&mut stdout, &options, &pattern, buffer)
+        args::Output::FileName => grep_filename(&mut stdout, &options, &path, &pattern, &buffer),
+        args::Output::Bytes    => grep_bytes(&mut stdout, &options, &pattern, &buffer),
+        args::Output::Offset   => grep_offset(&mut stdout, &options, &pattern, &buffer)
       }?;
 
 
+      // Preserve the last error or matched flag:
       if matched {
         result.and(Ok(true))
       }

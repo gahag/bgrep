@@ -2,6 +2,7 @@ use clap::{self, App, Arg, ArgMatches};
 use clap::{crate_authors, crate_version, crate_name, crate_description};
 
 
+/// The output mode.
 #[derive(Debug)]
 pub enum Output {
   FileName,
@@ -14,16 +15,18 @@ impl Default for Output {
 }
 
 
+/// The values of all flags, except help and version.
 #[derive(Default, Debug)]
 pub struct Options {
   pub inverse: bool,
   pub case_insensitive: bool,
   pub trim_ending_newline: bool,
-  pub non_matching: bool, // Wheter to print non matching files. Only true when (-L).
+  pub non_matching: bool, // Whether to print non matching files. Only true when (-L).
   pub output: Output
 }
 
 
+/// The arguments when the action is grep.
 #[derive(Default, Debug)]
 pub struct Args {
   pub options: Options,
@@ -32,6 +35,7 @@ pub struct Args {
 }
 
 
+/// The action to be executed.
 #[derive(Debug)]
 pub enum Command {
   Help(String),
@@ -40,6 +44,7 @@ pub enum Command {
 }
 
 
+/// The error type for the argument parser. Contains only the error message.
 #[derive(Debug)]
 pub struct Error {
   pub message: String
@@ -47,6 +52,7 @@ pub struct Error {
 
 
 
+/// Build clap's `App`. This specifies all arguments and metadata.
 fn build_app() -> App<'static, 'static> {
   App::new(crate_name!())
     .about(crate_description!())
@@ -132,15 +138,16 @@ fn build_app() -> App<'static, 'static> {
 }
 
 
+/// Build an `Args` from clap's `ArgMatches`.
+/// The matches are supposed to be valid, therefore there is no error handling/reporting.
 fn build_args<'a>(args: ArgMatches<'a>) -> Args {
-  let pattern = String::from(
-    args.value_of("pattern")
-        .expect("<pattern> not in ArgMatches") // pattern is required.
-  );
+  let pattern = args.value_of("pattern")
+                    .expect("<pattern> not in ArgMatches") // pattern is required.
+                    .to_owned();
 
-  let files = match args.values_of("files") {
-    None     => Box::new([String::from("-")]) as Box<[String]>, // Input from stdin.
-    Some(fs) => fs.map(String::from).collect()
+  let files: Box<[String]> = match args.values_of("files") {
+    None        => Box::new(["-".to_owned()]), // Input from stdin.
+    Some(files) => files.map(str::to_owned).collect()
   };
 
   let flag = |f| args.is_present(f);
@@ -174,6 +181,8 @@ fn build_args<'a>(args: ArgMatches<'a>) -> Args {
 }
 
 
+/// Parse the arguments from `std::env::args_os`.
+/// Returns the command to be executed, or the error message.
 pub fn parse() -> Result<Command, Error> {
   let app = build_app();
 
