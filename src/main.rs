@@ -37,7 +37,6 @@ fn main() -> ! {
         io::ErrorKind::InvalidInput     => 3,
         io::ErrorKind::NotFound         => 4,
         io::ErrorKind::PermissionDenied => 5,
-        io::ErrorKind::BrokenPipe       => 6,
         io::ErrorKind::Interrupted      => 130,
         _ => 2
       }

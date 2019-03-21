@@ -181,6 +181,64 @@ fn grep_offset(
 }
 
 
+/// Run bgrep with the given options, outputting to the given `StdoutLock`.
+/// Error detail may be outputted to stderr.
+/// Returns whether there was a match.
+fn run_file(
+  pattern: &Regex,
+  options: &args::Options,
+  stdout: &mut io::StdoutLock,
+  buffer: &mut Vec<u8>,
+  path: String,
+) -> io::Result<bool> {
+  buffer.clear();
+
+  let (read_result, path) =
+    if path == "-" {
+      (io::stdin().lock().read_to_end(buffer), "<stdin>")
+    }
+  else {
+    let mut file = File::open(&path)
+                        .map_err(|e| {
+                          eprintln!("Error: failed to open file '{}'", path);
+                          e
+                        })?;
+
+    // Resize buffer to the file size if it exceeds the current size.
+    // Currently, the strategy is to grow if needed, and otherwise do nothing.
+    // Considering we never shrink the buffer, this can be bad if the first file
+    // is huge and the others are small.
+    let file_size = file.metadata()
+                        .map(|m| m.len())
+                        .unwrap_or(0) as usize;
+    buffer.reserve(
+      file_size.saturating_sub(buffer.len())
+    );
+
+    (file.read_to_end(buffer), path.as_str())
+  };
+
+  if let Err(e) = read_result {
+    eprintln!("Error: failed to read file '{}'", path);
+    return Err(e);
+  }
+
+
+  // Trim the ending newline if requested and present:
+  if options.trim_ending_newline && buffer.last() == Some(&b'\n') {
+    buffer.pop();
+  };
+
+
+  let matched = match options.output {
+    args::Output::FileName => grep_filename(stdout, options, &path, pattern, buffer),
+    args::Output::Bytes    => grep_bytes(stdout, options, pattern, buffer),
+    args::Output::Offset   => grep_offset(stdout, options, pattern, buffer)
+  }?;
+
+  Ok(matched)
+}
+
 /// Run bgrep with the given args, outputting to stdout.
 /// Error detail may be outputted to stderr.
 /// Returns whether there was a match.
@@ -204,65 +262,42 @@ pub fn run(args: Args) -> io::Result<bool> {
   // Reuse the same buffer for all the files, minimizing allocations.
   let mut buffer = Vec::<u8>::new();
 
-  // We need to store the last generated error if any, or whether there was a match.
   // Converting to vec to use the owned iterator. Box<[T]> has no owned iterator.
-  files.into_vec().into_iter().fold(
-    Ok(false), // : io::Result<bool>, whether there was a match, or the last error.
-    |result: io::Result<bool>, path: String| {
-      buffer.clear();
+  let mut files = files.into_vec().into_iter();
 
-      let (read_result, path) =
-        if path == "-" {
-          (io::stdin().lock().read_to_end(&mut buffer), "<stdin>")
-        }
-        else {
-          let mut file = File::open(&path)
-                              .map_err(|e| {
-                                eprintln!("Error: failed to open file '{}'", path);
-                                e
-                              })?;
+  // The next part is a bit complicated:
+  // Bgrep must return:
+  //
+  // 0 if there was any match, and no errors. `BrokenPipe` is not considered an error, but
+  //   a signal to stop processing.
+  //
+  // 1 if there was no match, and no errors. `BrokenPipe` cannot happen in this case,
+  //   because it should only happen when outputting, and no matches means no output.
+  //
+  // An error code corresponding to the last error. Common errors are `NotFound` and
+  // `PermissionDenied`.
 
-          // Resize buffer to the file size if it exceeds the current size.
-          // Currently, the strategy is to grow if needed, and otherwise do nothing.
-          // Considering we never shrink the buffer, this can be bad if the first file
-          // is huge and the others are small.
-          let file_size = file.metadata()
-                              .map(|m| m.len())
-                              .unwrap_or(0) as usize;
-          buffer.reserve(
-            file_size.saturating_sub(buffer.len())
-          );
+  // We need to store the last generated error if any, or whether there was a match.
+  type State = io::Result<bool>;
 
-          (file.read_to_end(&mut buffer), path.as_str())
-        };
-
-
-      if let Err(e) = read_result {
-        eprintln!("Error: failed to read file '{}'", path);
-        return Err(e);
-      }
-
-
-      // Trim the ending newline if requested and present:
-      if options.trim_ending_newline && buffer.last() == Some(&b'\n') {
-        buffer.pop();
-      };
-
-
-      let matched = match options.output {
-        args::Output::FileName => grep_filename(&mut stdout, &options, &path, &pattern, &buffer),
-        args::Output::Bytes    => grep_bytes(&mut stdout, &options, &pattern, &buffer),
-        args::Output::Offset   => grep_offset(&mut stdout, &options, &pattern, &buffer)
-      }?;
-
-
-      // Preserve the last error or matched flag:
-      if matched {
-        result.and(Ok(true))
-      }
-      else {
-        result
-      }
+  // Also, we must bail early if `BrokenPipe` occurs:
+  let result = files.try_fold(
+    Ok(false),
+    |result: State, path: String| -> Result<State, State> {
+      // The outter Result is used to bail early on `BrokenPipe`.
+      // The inner Result is used to keep the last error, or the match status.
+      match run_file(&pattern, &options, &mut stdout, &mut buffer, path) {
+        Ok(true)  => Ok(result.and(Ok(true))), // Set to true if there was no error.
+        Ok(false) => Ok(result),               // No need to update the result.
+        Err(e)    => if e.kind() != io::ErrorKind::BrokenPipe {
+                       Ok(Err(e)) // Store the error and move on.
+                     } else {
+                       // Bail early on `BronkenPipe`, conserving the previous error if any.
+                       Err(result.and(Ok(true))) // `BrokenPipe` only happens when
+                     }                           // outputting, and that means there was
+      }                                          // a match.
     }
-  )
+  );
+
+  result.unwrap_or_else(|r| r)
 }
