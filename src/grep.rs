@@ -80,9 +80,14 @@ fn grep_bytes(
   stdout: &mut io::StdoutLock,
   options: &args::Options,
   pattern: &Regex,
+  path: &str,
   buffer: &[u8]
 ) -> io::Result<bool> {
   let mut write_bytes = |bs| {
+    if options.print_filename {
+      write!(stdout, "{}: ", path)?;
+    }
+
     stdout.write(bs)?;
     writeln!(stdout)
   };
@@ -135,9 +140,16 @@ fn grep_offset(
   stdout: &mut io::StdoutLock,
   options: &args::Options,
   pattern: &Regex,
+  path: &str,
   buffer: &[u8]
 ) -> io::Result<bool> {
-  let mut write_hex = |x| writeln!(stdout, "0x{:x}", x);
+  let mut write_hex = |x| {
+    if options.print_filename {
+      writeln!(stdout, "{}: 0x{:x}", path, x)
+    } else {
+      writeln!(stdout, "0x{:x}", x)
+    }
+  };
 
 
   let mut matches = pattern.find_iter(buffer);
@@ -197,26 +209,26 @@ fn run_file(
     if path == "-" {
       (io::stdin().lock().read_to_end(buffer), "<stdin>")
     }
-  else {
-    let mut file = File::open(&path)
-                        .map_err(|e| {
-                          eprintln!("Error: failed to open file '{}'", path);
-                          e
-                        })?;
+    else {
+      let mut file = File::open(&path)
+                          .map_err(|e| {
+                            eprintln!("Error: failed to open file '{}'", path);
+                            e
+                          })?;
 
-    // Resize buffer to the file size if it exceeds the current size.
-    // Currently, the strategy is to grow if needed, and otherwise do nothing.
-    // Considering we never shrink the buffer, this can be bad if the first file
-    // is huge and the others are small.
-    let file_size = file.metadata()
-                        .map(|m| m.len())
-                        .unwrap_or(0) as usize;
-    buffer.reserve(
-      file_size.saturating_sub(buffer.len())
-    );
+      // Resize buffer to the file size if it exceeds the current size.
+      // Currently, the strategy is to grow if needed, and otherwise do nothing.
+      // Considering we never shrink the buffer, this can be bad if the first file
+      // is huge and the others are small.
+      let file_size = file.metadata()
+                          .map(|m| m.len())
+                          .unwrap_or(0) as usize;
+      buffer.reserve(
+        file_size.saturating_sub(buffer.len())
+      );
 
-    (file.read_to_end(buffer), path.as_str())
-  };
+      (file.read_to_end(buffer), path.as_str())
+    };
 
   if let Err(e) = read_result {
     eprintln!("Error: failed to read file '{}'", path);
@@ -232,8 +244,8 @@ fn run_file(
 
   let matched = match options.output {
     args::Output::FileName => grep_filename (stdout, options, pattern, &path, buffer),
-    args::Output::Bytes    => grep_bytes    (stdout, options, pattern, buffer),
-    args::Output::Offset   => grep_offset   (stdout, options, pattern, buffer)
+    args::Output::Bytes    => grep_bytes    (stdout, options, pattern, &path, buffer),
+    args::Output::Offset   => grep_offset   (stdout, options, pattern, &path, buffer)
   }?;
 
   Ok(matched)

@@ -14,12 +14,14 @@ FLAGS:
     -b, --byte-offset              Prints the byte offset of each match
     -l, --files-with-matches       Prints the name of the matched files (default output mode)
     -L, --files-without-matches    Prints the name of non-matched files
-    -h, --help                     Prints help information
+        --help                     Prints help information
     -i, --ignore-case              Case insensitive matching for ASCII alphabetic characters
     -v, --invert-match             Invert the sense of matching, to select non matching slices
+    -h, --no-filename              Suppress the file names on output (default when there is a single file).
     -o, --only-matching            Prints the matched bytes of each match
     -n, --trim-ending-newline      If the file ends with a newline, disconsider the last byte
     -V, --version                  Prints version information
+    -H, --with-filename            Print the file name for each match (default when there are multiple files).
 ```
 
 Bgrep uses Rust's [regex crate](https://crates.io/crates/regex) as engine. The regex
@@ -56,7 +58,7 @@ $ bgrep -o '\x40.+\x4d' file.bin
 
 List non-matching files: (`tac -rs .` reverses the file)
 ```
-$ tac -rs . file.bin | bgrep -L '\x4C\x4D' file.bin
+$ tac -rs . file.bin | bgrep -L '\x4C\x4D' file.bin -
 <stdin>
 ```
 

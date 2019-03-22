@@ -22,6 +22,7 @@ pub struct Options {
   pub case_insensitive: bool,
   pub trim_ending_newline: bool,
   pub non_matching: bool, // Whether to print non matching files. Only true when (-L).
+  pub print_filename: bool,
   pub output: Output
 }
 
@@ -91,6 +92,24 @@ fn build_app() -> App<'static, 'static> {
         .help("If the file ends with a newline, disconsider the last byte")
     )
     // Output flags:
+    .arg(
+      Arg::with_name("with-filename")
+        .short("H")
+        .long("with-filename")
+        .help("Print the file name for each match (default when there are multiple files).")
+        .overrides_with("no-filename")
+    )
+    .arg(
+      Arg::with_name("no-filename")
+        .short("h")
+        .long("no-filename")
+        .help("Suppress the file names on output (default when there is a single file).")
+        .overrides_with("with-filename")
+        .conflicts_with_all(&[
+          "files-with-matches",
+          "files-without-matches",
+        ])
+    )
     .arg(
       Arg::with_name("only-matching")
         .short("o")
@@ -173,6 +192,7 @@ fn build_args<'a>(args: ArgMatches<'a>) -> Args {
       case_insensitive: flag("ignore-case"),
       trim_ending_newline: flag("trim-ending-newline"),
       non_matching: flag("files-without-matches"),
+      print_filename: flag("with-filename") || !(flag("no-filename") || files.len() == 1),
       output
     },
     pattern,
