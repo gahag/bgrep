@@ -28,8 +28,8 @@ fn build_pattern(
 fn grep_filename(
   stdout: &mut io::StdoutLock,
   options: &args::Options,
-  path: &str,
   pattern: &Regex,
+  path: &str,
   buffer: &[u8]
 ) -> io::Result<bool> {
   // When inverse matching, matches must be checked until a "hole" is found.
@@ -185,11 +185,11 @@ fn grep_offset(
 /// Error detail may be outputted to stderr.
 /// Returns whether there was a match.
 fn run_file(
-  pattern: &Regex,
-  options: &args::Options,
   stdout: &mut io::StdoutLock,
-  buffer: &mut Vec<u8>,
+  options: &args::Options,
+  pattern: &Regex,
   path: String,
+  buffer: &mut Vec<u8>,
 ) -> io::Result<bool> {
   buffer.clear();
 
@@ -231,9 +231,9 @@ fn run_file(
 
 
   let matched = match options.output {
-    args::Output::FileName => grep_filename(stdout, options, &path, pattern, buffer),
-    args::Output::Bytes    => grep_bytes(stdout, options, pattern, buffer),
-    args::Output::Offset   => grep_offset(stdout, options, pattern, buffer)
+    args::Output::FileName => grep_filename (stdout, options, pattern, &path, buffer),
+    args::Output::Bytes    => grep_bytes    (stdout, options, pattern, buffer),
+    args::Output::Offset   => grep_offset   (stdout, options, pattern, buffer)
   }?;
 
   Ok(matched)
@@ -243,7 +243,7 @@ fn run_file(
 /// Error detail may be outputted to stderr.
 /// Returns whether there was a match.
 pub fn run(args: Args) -> io::Result<bool> {
-  // Deconstruct to split ownership.
+  // Deconstruct to split ownership:
   let Args { options, pattern, files } = args;
 
 
@@ -255,21 +255,18 @@ pub fn run(args: Args) -> io::Result<bool> {
   )?;
 
 
-  // Lock stdout before loop to prevent locking repetitively.
+  // Lock stdout before loop to prevent repetitive locking.
   let stdout = io::stdout();
   let mut stdout = stdout.lock();
 
   // Reuse the same buffer for all the files, minimizing allocations.
   let mut buffer = Vec::<u8>::new();
 
-  // Converting to vec to use the owned iterator. Box<[T]> has no owned iterator.
-  let mut files = files.into_vec().into_iter();
-
   // The next part is a bit complicated:
   // Bgrep must return:
   //
-  // 0 if there was any match, and no errors. `BrokenPipe` is not considered an error, but
-  //   a signal to stop processing.
+  // 0 if there was any match, and no errors. `BrokenPipe` is not considered an error,
+  //   but a signal to stop processing.
   //
   // 1 if there was no match, and no errors. `BrokenPipe` cannot happen in this case,
   //   because it should only happen when outputting, and no matches means no output.
@@ -277,27 +274,26 @@ pub fn run(args: Args) -> io::Result<bool> {
   // An error code corresponding to the last error. Common errors are `NotFound` and
   // `PermissionDenied`.
 
-  // We need to store the last generated error if any, or whether there was a match.
-  type State = io::Result<bool>;
+  // We need to store the last generated error if any, or whether there was a match:
+  let mut result = Ok(false);
 
-  // Also, we must bail early if `BrokenPipe` occurs:
-  let result = files.try_fold(
-    Ok(false),
-    |result: State, path: String| -> Result<State, State> {
-      // The outter Result is used to bail early on `BrokenPipe`.
-      // The inner Result is used to keep the last error, or the match status.
-      match run_file(&pattern, &options, &mut stdout, &mut buffer, path) {
-        Ok(true)  => Ok(result.and(Ok(true))), // Set to true if there was no error.
-        Ok(false) => Ok(result),               // No need to update the result.
-        Err(e)    => if e.kind() != io::ErrorKind::BrokenPipe {
-                       Ok(Err(e)) // Store the error and move on.
-                     } else {
-                       // Bail early on `BronkenPipe`, conserving the previous error if any.
-                       Err(result.and(Ok(true))) // `BrokenPipe` only happens when
-                     }                           // outputting, and that means there was
-      }                                          // a match.
+  // Converting to vec to use the owned iterator. Box<[T]> has no owned iterator.
+  for file in files.to_vec() {
+    let file: String = file; // Make sure we are using an owned iterator.
+
+    match run_file(&mut stdout, &options, &pattern, file, &mut buffer) {
+      Ok(false) => (),
+      Ok(true) => result = result.map(|_| true), // Set to true if there was no error.
+      Err(e) =>
+        if e.kind() == io::ErrorKind::BrokenPipe {
+          // Bail early on `BronkenPipe`, conserving the previous error if any.
+          result = result.map(|_| true); // `BrokenPipe` only happens when outputting,
+          break;                         // and that means there was a match.
+        } else {
+          result = Err(e) // Store the error and move on.
+        }
     }
-  );
+  }
 
-  result.unwrap_or_else(|r| r)
+  result
 }
