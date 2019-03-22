@@ -1,6 +1,6 @@
 [package]
 name = "bgrep"
-version = "0.1.0"
+version = "1.0.0"
 description = "bgrep is a grep tailored to handle binary patterns and files"
 authors = ["gahag <gabriel.s.b@live.com>"]
 homepage = "https://github.com/gahag/bgrep"
