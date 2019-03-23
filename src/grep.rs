@@ -1,6 +1,7 @@
 use std::io;
 use std::io::{Read, Write};
 use std::fs::File;
+use std::path::{self, Path, PathBuf};
 
 use regex::bytes::{Regex, RegexBuilder};
 
@@ -29,7 +30,7 @@ fn grep_filename(
   stdout: &mut io::StdoutLock,
   options: &args::Options,
   pattern: &Regex,
-  path: &str,
+  path: path::Display,
   buffer: &[u8]
 ) -> io::Result<bool> {
   // When inverse matching, matches must be checked until a "hole" is found.
@@ -80,7 +81,7 @@ fn grep_bytes(
   stdout: &mut io::StdoutLock,
   options: &args::Options,
   pattern: &Regex,
-  path: &str,
+  path: path::Display,
   buffer: &[u8]
 ) -> io::Result<bool> {
   let mut write_bytes = |bs| {
@@ -140,7 +141,7 @@ fn grep_offset(
   stdout: &mut io::StdoutLock,
   options: &args::Options,
   pattern: &Regex,
-  path: &str,
+  path: path::Display,
   buffer: &[u8]
 ) -> io::Result<bool> {
   let mut write_hex = |x| {
@@ -200,19 +201,19 @@ fn run_file(
   stdout: &mut io::StdoutLock,
   options: &args::Options,
   pattern: &Regex,
-  path: String,
+  path: PathBuf,
   buffer: &mut Vec<u8>,
 ) -> io::Result<bool> {
   buffer.clear();
 
   let (read_result, path) =
-    if path == "-" {
-      (io::stdin().lock().read_to_end(buffer), "<stdin>")
+    if path == Path::new(args::STDIN) { // Path::new is cost-free.
+      (io::stdin().lock().read_to_end(buffer), Path::new("<stdin>").display())
     }
     else {
       let mut file = File::open(&path)
                           .map_err(|e| {
-                            eprintln!("Error: failed to open file '{}'", path);
+                            eprintln!("Error: failed to open file '{}'", path.display());
                             e
                           })?;
 
@@ -227,7 +228,7 @@ fn run_file(
         file_size.saturating_sub(buffer.len())
       );
 
-      (file.read_to_end(buffer), path.as_str())
+      (file.read_to_end(buffer), path.display())
     };
 
   if let Err(e) = read_result {
@@ -243,9 +244,9 @@ fn run_file(
 
 
   let matched = match options.output {
-    args::Output::FileName => grep_filename (stdout, options, pattern, &path, buffer),
-    args::Output::Bytes    => grep_bytes    (stdout, options, pattern, &path, buffer),
-    args::Output::Offset   => grep_offset   (stdout, options, pattern, &path, buffer)
+    args::Output::FileName => grep_filename (stdout, options, pattern, path, buffer),
+    args::Output::Bytes    => grep_bytes    (stdout, options, pattern, path, buffer),
+    args::Output::Offset   => grep_offset   (stdout, options, pattern, path, buffer)
   }?;
 
   Ok(matched)
@@ -291,7 +292,7 @@ pub fn run(args: Args) -> io::Result<bool> {
 
   // Converting to vec to use the owned iterator. Box<[T]> has no owned iterator.
   for file in files.to_vec() {
-    let file: String = file; // Make sure we are using an owned iterator.
+    let file: PathBuf = file; // Make sure we are using an owned iterator.
 
     match run_file(&mut stdout, &options, &pattern, file, &mut buffer) {
       Ok(false) => (),

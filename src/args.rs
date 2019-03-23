@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{self, App, Arg, ArgMatches};
 use clap::{crate_authors, crate_version, crate_name, crate_description};
 
@@ -32,7 +34,7 @@ pub struct Options {
 pub struct Args {
   pub options: Options,
   pub pattern: String,
-  pub files: Box<[String]>
+  pub files: Box<[PathBuf]>
 }
 
 
@@ -50,6 +52,11 @@ pub enum Command {
 pub struct Error {
   pub message: String
 }
+
+
+
+/// The path used to denote reading from stdin.
+pub const STDIN: &str = "-";
 
 
 
@@ -164,9 +171,9 @@ fn build_args<'a>(args: ArgMatches<'a>) -> Args {
                     .expect("<pattern> not in ArgMatches") // pattern is required.
                     .to_owned();
 
-  let files: Box<[String]> = match args.values_of("files") {
-    None        => Box::new(["-".to_owned()]), // Input from stdin.
-    Some(files) => files.map(str::to_owned).collect()
+  let files: Box<[PathBuf]> = match args.values_of_os("files") {
+    None        => Box::new([PathBuf::from(STDIN)]), // Input from stdin.
+    Some(files) => files.map(PathBuf::from).collect()
   };
 
   let flag = |f| args.is_present(f);
