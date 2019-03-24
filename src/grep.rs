@@ -1,7 +1,8 @@
 use std::io;
 use std::io::{Read, Write};
 use std::fs::File;
-use std::path::{self, Path, PathBuf};
+use std::path::{Path, PathBuf};
+use std::fmt::Display;
 
 use regex::bytes::{Regex, RegexBuilder};
 
@@ -10,11 +11,11 @@ use crate::args::{self, Args};
 
 /// Build the regex pattern with the given options.
 /// By default, the `unicode` flag is set to false, and `dot_matches_new_line` set to true.
-fn build_pattern(
-  pattern: &String,
+fn build_pattern<P: AsRef<str>>(
+  pattern: P,
   options: &args::Options
 ) -> Result<Regex, regex::Error> {
-  let mut builder = RegexBuilder::new(pattern);
+  let mut builder = RegexBuilder::new(pattern.as_ref());
 
   builder.unicode(false);
   builder.dot_matches_new_line(true);
@@ -26,13 +27,15 @@ fn build_pattern(
 
 /// Run bgrep, outputting `path` to the given `StdoutLock` if there is a match.
 /// Returns whether there was a match.
-fn grep_filename(
-  stdout: &mut io::StdoutLock,
+fn grep_filename<O: Write, P: Display, B: AsRef<[u8]>>(
+  stdout: &mut O,
   options: &args::Options,
   pattern: &Regex,
-  path: path::Display,
-  buffer: &[u8]
+  path: P,
+  buffer: B
 ) -> io::Result<bool> {
+  let buffer = buffer.as_ref();
+
   // When inverse matching, matches must be checked until a "hole" is found.
   // Otherwise, the more performant `Regex::is_match` can be used.
   if options.inverse {
@@ -77,13 +80,15 @@ fn grep_filename(
 
 /// Run bgrep, outputting the matched bytes to the given `StdoutLock`.
 /// Returns whether there was a match.
-fn grep_bytes(
-  stdout: &mut io::StdoutLock,
+fn grep_bytes<O: Write, P: Display, B: AsRef<[u8]>>(
+  stdout: &mut O,
   options: &args::Options,
   pattern: &Regex,
-  path: path::Display,
-  buffer: &[u8]
+  path: P,
+  buffer: B,
 ) -> io::Result<bool> {
+  let buffer = buffer.as_ref();
+
   let mut write_bytes = |bs| {
     if options.print_filename {
       write!(stdout, "{}: ", path)?;
@@ -102,7 +107,7 @@ fn grep_bytes(
 
     // Set `matched` if there is a first occurrence:
     if let Some(bs) = matches.next() {
-      if !bs.is_empty() { // A regex may have a empty match, but when inverse matching 
+      if !bs.is_empty() { // A regex may have a empty match, but when inverse matching
         write_bytes(bs)?; // we disconsider empty intervals.
         matched = true;
       }
@@ -137,13 +142,15 @@ fn grep_bytes(
 
 /// Run bgrep, outputting the matche's offset in hex to the given `StdoutLock`.
 /// Returns whether there was a match.
-fn grep_offset(
-  stdout: &mut io::StdoutLock,
+fn grep_offset<O: Write, P: Display, B: AsRef<[u8]>>(
+  stdout: &mut O,
   options: &args::Options,
   pattern: &Regex,
-  path: path::Display,
-  buffer: &[u8]
+  path: P,
+  buffer: B
 ) -> io::Result<bool> {
+  let buffer = buffer.as_ref();
+
   let mut write_hex = |x| {
     if options.print_filename {
       writeln!(stdout, "{}: 0x{:x}", path, x)
@@ -151,7 +158,6 @@ fn grep_offset(
       writeln!(stdout, "0x{:x}", x)
     }
   };
-
 
   let mut matches = pattern.find_iter(buffer);
 
@@ -197,13 +203,16 @@ fn grep_offset(
 /// Run bgrep with the given options, outputting to the given `StdoutLock`.
 /// Error detail may be outputted to stderr.
 /// Returns whether there was a match.
-fn run_file(
-  stdout: &mut io::StdoutLock,
+fn run_file<O: Write, P: AsRef<Path>, B: AsMut<Vec<u8>>>(
+  stdout: &mut O,
   options: &args::Options,
   pattern: &Regex,
-  path: PathBuf,
-  buffer: &mut Vec<u8>,
+  path: P,
+  buffer: &mut B
 ) -> io::Result<bool> {
+  let buffer = buffer.as_mut();
+  let path = path.as_ref();
+
   buffer.clear();
 
   let (read_result, path) =
@@ -211,7 +220,7 @@ fn run_file(
       (io::stdin().lock().read_to_end(buffer), Path::new("<stdin>").display())
     }
     else {
-      let mut file = File::open(&path)
+      let mut file = File::open(path)
                           .map_err(|e| {
                             eprintln!("Error: failed to open file '{}'", path.display());
                             e
@@ -294,7 +303,7 @@ pub fn run(args: Args) -> io::Result<bool> {
   for file in files.to_vec() {
     let file: PathBuf = file; // Make sure we are using an owned iterator.
 
-    match run_file(&mut stdout, &options, &pattern, file, &mut buffer) {
+    match run_file(&mut stdout, &options, &pattern, &file, &mut buffer) {
       Ok(false) => (),
       Ok(true) => result = result.map(|_| true), // Set to true if there was no error.
       Err(e) =>
