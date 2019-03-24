@@ -76,6 +76,7 @@ fn build_app() -> App<'static, 'static> {
     .arg(
       Arg::with_name("files")
         .multiple(true)
+        .default_value(STDIN)
         .index(2)
     )
     // Matching flags:
@@ -171,10 +172,10 @@ fn build_args<'a>(args: ArgMatches<'a>) -> Args {
                     .expect("<pattern> not in ArgMatches") // pattern is required.
                     .to_owned();
 
-  let files: Box<[PathBuf]> = match args.values_of_os("files") {
-    None        => Box::new([PathBuf::from(STDIN)]), // Input from stdin.
-    Some(files) => files.map(PathBuf::from).collect()
-  };
+  let files: Box<[PathBuf]> = args.values_of_os("files")
+                                  .expect("<files> not in ArgMatches")
+                                  .map(PathBuf::from)
+                                  .collect();
 
   let flag = |f| args.is_present(f);
 
