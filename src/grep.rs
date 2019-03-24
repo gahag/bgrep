@@ -11,7 +11,7 @@ use crate::args::{self, Args};
 /// Build the regex pattern with the given options.
 /// By default, the `unicode` flag is set to false, and `dot_matches_new_line` set to true.
 fn build_pattern(
-  pattern: &String,
+  pattern: &str,
   options: &args::Options
 ) -> Result<Regex, regex::Error> {
   let mut builder = RegexBuilder::new(pattern);
@@ -89,7 +89,7 @@ fn grep_bytes(
       write!(stdout, "{}: ", path)?;
     }
 
-    stdout.write(bs)?;
+    stdout.write_all(bs)?;
     writeln!(stdout)
   };
 
