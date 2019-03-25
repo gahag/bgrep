@@ -11,7 +11,7 @@ use crate::args::{self, Args};
 /// Build the regex pattern with the given options.
 /// By default, the `unicode` flag is set to false, and `dot_matches_new_line` set to true.
 fn build_pattern(
-  pattern: &str,
+  pattern: &String,
   options: &args::Options
 ) -> Result<Regex, regex::Error> {
   let mut builder = RegexBuilder::new(pattern);
