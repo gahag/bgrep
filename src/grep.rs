@@ -89,7 +89,7 @@ fn grep_bytes(
       write!(stdout, "{}: ", path)?;
     }
 
-    stdout.write(bs)?;
+    stdout.write_all(bs)?;
     writeln!(stdout)
   };
 

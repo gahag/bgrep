@@ -167,7 +167,7 @@ fn build_app() -> App<'static, 'static> {
 
 /// Build an `Args` from clap's `ArgMatches`.
 /// The matches are supposed to be valid, therefore there is no error handling/reporting.
-fn build_args<'a>(args: ArgMatches<'a>) -> Args {
+fn build_args(args: ArgMatches) -> Args {
   let pattern = args.value_of("pattern")
                     .expect("<pattern> not in ArgMatches") // pattern is required.
                     .to_owned();
