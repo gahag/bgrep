@@ -12,7 +12,7 @@ use crate::args::{self, Args};
 /// Build the regex pattern with the given options.
 /// By default, the `unicode` flag is set to false, and `dot_matches_new_line` set to true.
 fn build_pattern<P: AsRef<str>>(
-  pattern: P,
+  pattern: &P,
   options: &args::Options
 ) -> Result<Regex, regex::Error> {
   let mut builder = RegexBuilder::new(pattern.as_ref());
@@ -158,6 +158,7 @@ fn grep_offset<O: Write, P: Display, B: AsRef<[u8]>>(
       writeln!(stdout, "0x{:x}", x)
     }
   };
+
 
   let mut matches = pattern.find_iter(buffer);
 
