@@ -1,6 +1,7 @@
 mod args;
 mod grep;
 
+use std::env;
 use std::io::{self, Write};
 use std::process;
 
@@ -13,7 +14,9 @@ fn main() -> ! {
   /// Error detail may be outputted to stderr.
   /// Returns whether there was a match.
   fn run() -> io::Result<bool> { // Returns whether there was a match.
-    let command = args::parse().map_err(
+    let args = env::args_os();
+
+    let command = args::parse(args).map_err(
       |e| {
         eprintln!("{}", e.message);
         io::ErrorKind::InvalidInput

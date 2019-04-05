@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 use clap::{self, App, Arg, ArgMatches};
@@ -211,10 +212,13 @@ fn build_args(args: ArgMatches) -> Args {
 
 /// Parse the arguments from `std::env::args_os`.
 /// Returns the command to be executed, or the error message.
-pub fn parse() -> Result<Command, Error> {
+pub fn parse<
+  T: Into<OsString> + Clone,
+  A: IntoIterator<Item = T>
+>(args: A) -> Result<Command, Error> {
   let app = build_app();
 
-  match app.get_matches_safe() {
+  match app.get_matches_from_safe(args) {
     Ok(arg_matches) => Ok(Command::Grep(build_args(arg_matches))),
     Err(e) => match e.kind {
       clap::ErrorKind::HelpDisplayed    => Ok(Command::Help(e.message)),
