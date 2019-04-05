@@ -20,10 +20,16 @@ fn main() -> ! {
       }
     )?;
 
+
+    // Lock stdout to prevent repetitive locking.
+    let stdout = io::stdout();
+    let mut stdout = stdout.lock();
+
+
     match command {
-      Command::Grep(args) => grep::run(args),
+      Command::Grep(args) => grep::run(args, &mut stdout),
       Command::Help(msg) | Command::Version(msg) => {
-        writeln!(io::stdout(), "{}", msg)?;
+        writeln!(stdout, "{}", msg)?;
         Ok(true)
       }
     }

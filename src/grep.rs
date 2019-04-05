@@ -25,10 +25,10 @@ fn build_pattern<P: AsRef<str>>(
 }
 
 
-/// Run bgrep, outputting `path` to the given `StdoutLock` if there is a match.
+/// Run bgrep, outputting `path` to the given `out` if there is a match.
 /// Returns whether there was a match.
 fn grep_filename<O: Write, P: Display, B: AsRef<[u8]>>(
-  stdout: &mut O,
+  out: &mut O,
   options: &args::Options,
   pattern: &Regex,
   path: P,
@@ -61,7 +61,7 @@ fn grep_filename<O: Write, P: Display, B: AsRef<[u8]>>(
                 ^ options.non_matching; // List non matching files.
 
     if matched {
-      writeln!(stdout, "{}", path)?;
+      writeln!(out, "{}", path)?;
     }
 
     Ok(matched)
@@ -70,7 +70,7 @@ fn grep_filename<O: Write, P: Display, B: AsRef<[u8]>>(
     let matched = pattern.is_match(buffer) ^ options.non_matching;
 
     if matched {
-      writeln!(stdout, "{}", path)?;
+      writeln!(out, "{}", path)?;
     }
 
     Ok(matched)
@@ -78,10 +78,10 @@ fn grep_filename<O: Write, P: Display, B: AsRef<[u8]>>(
 }
 
 
-/// Run bgrep, outputting the matched bytes to the given `StdoutLock`.
+/// Run bgrep, outputting the matched bytes to the given `out`.
 /// Returns whether there was a match.
 fn grep_bytes<O: Write, P: Display, B: AsRef<[u8]>>(
-  stdout: &mut O,
+  out: &mut O,
   options: &args::Options,
   pattern: &Regex,
   path: P,
@@ -91,11 +91,11 @@ fn grep_bytes<O: Write, P: Display, B: AsRef<[u8]>>(
 
   let mut write_bytes = |bs| {
     if options.print_filename {
-      write!(stdout, "{}: ", path)?;
+      write!(out, "{}: ", path)?;
     }
 
-    stdout.write_all(bs)?;
-    writeln!(stdout)
+    out.write_all(bs)?;
+    writeln!(out)
   };
 
 
@@ -140,10 +140,10 @@ fn grep_bytes<O: Write, P: Display, B: AsRef<[u8]>>(
 }
 
 
-/// Run bgrep, outputting the matche's offset in hex to the given `StdoutLock`.
+/// Run bgrep, outputting the matche's offset in hex to the given `out`.
 /// Returns whether there was a match.
 fn grep_offset<O: Write, P: Display, B: AsRef<[u8]>>(
-  stdout: &mut O,
+  out: &mut O,
   options: &args::Options,
   pattern: &Regex,
   path: P,
@@ -153,9 +153,9 @@ fn grep_offset<O: Write, P: Display, B: AsRef<[u8]>>(
 
   let mut write_hex = |x| {
     if options.print_filename {
-      writeln!(stdout, "{}: 0x{:x}", path, x)
+      writeln!(out, "{}: 0x{:x}", path, x)
     } else {
-      writeln!(stdout, "0x{:x}", x)
+      writeln!(out, "0x{:x}", x)
     }
   };
 
@@ -201,11 +201,11 @@ fn grep_offset<O: Write, P: Display, B: AsRef<[u8]>>(
 }
 
 
-/// Run bgrep with the given options, outputting to the given `StdoutLock`.
+/// Run bgrep with the given options, outputting to the given `out`.
 /// Error detail may be outputted to stderr.
 /// Returns whether there was a match.
 fn run_file<O: Write, P: AsRef<Path>, B: AsMut<Vec<u8>>>(
-  stdout: &mut O,
+  out: &mut O,
   options: &args::Options,
   pattern: &Regex,
   path: P,
@@ -254,9 +254,9 @@ fn run_file<O: Write, P: AsRef<Path>, B: AsMut<Vec<u8>>>(
 
 
   let matched = match options.output {
-    args::Output::FileName => grep_filename (stdout, options, pattern, path, buffer),
-    args::Output::Bytes    => grep_bytes    (stdout, options, pattern, path, buffer),
-    args::Output::Offset   => grep_offset   (stdout, options, pattern, path, buffer)
+    args::Output::FileName => grep_filename (out, options, pattern, path, buffer),
+    args::Output::Bytes    => grep_bytes    (out, options, pattern, path, buffer),
+    args::Output::Offset   => grep_offset   (out, options, pattern, path, buffer)
   }?;
 
   Ok(matched)
@@ -265,7 +265,7 @@ fn run_file<O: Write, P: AsRef<Path>, B: AsMut<Vec<u8>>>(
 /// Run bgrep with the given args, outputting to stdout.
 /// Error detail may be outputted to stderr.
 /// Returns whether there was a match.
-pub fn run(args: Args) -> io::Result<bool> {
+pub fn run<O: Write>(args: Args, out: &mut O) -> io::Result<bool> {
   // Deconstruct to split ownership:
   let Args { options, pattern, files } = args;
 
@@ -277,10 +277,6 @@ pub fn run(args: Args) -> io::Result<bool> {
     }
   )?;
 
-
-  // Lock stdout before loop to prevent repetitive locking.
-  let stdout = io::stdout();
-  let mut stdout = stdout.lock();
 
   // Reuse the same buffer for all the files, minimizing allocations.
   let mut buffer = Vec::<u8>::new();
@@ -304,7 +300,7 @@ pub fn run(args: Args) -> io::Result<bool> {
   for file in files.to_vec() {
     let file: PathBuf = file; // Make sure we are using an owned iterator.
 
-    match run_file(&mut stdout, &options, &pattern, &file, &mut buffer) {
+    match run_file(out, &options, &pattern, &file, &mut buffer) {
       Ok(false) => (),
       Ok(true) => result = result.map(|_| true), // Set to true if there was no error.
       Err(e) =>
